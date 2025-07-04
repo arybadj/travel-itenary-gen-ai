@@ -2,32 +2,53 @@
 from dotenv import load_dotenv
 import os
 import google.generativeai as genai
+import openai
 from PIL import Image
 import streamlit as st
 
 # Load environment variables
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 
-# Validate API Key
-if not api_key:
+# Validate API Keys
+if not google_api_key:
     st.error("GOOGLE_API_KEY not found in .env file. Please check your configuration.")
+    st.stop()
+if not openai_api_key:
+    st.error("OPENAI_API_KEY not found in .env file. Please check your configuration.")
     st.stop()
 
 # Configure the Gemini API
-genai.configure(api_key=api_key)
+genai.configure(api_key=google_api_key)
 
-# Function: Get response from image input
+# Configure OpenAI API
+openai.api_key = openai_api_key
+
+# Function: Get response from image input (Gemini)
 def get_response_image(image, prompt):
     model = genai.GenerativeModel('gemini-pro-vision')
     response = model.generate_content([image[0], prompt])
     return response.text
 
-# Function: Get response from text input
-def get_response(prompt, input_text):
+# Function: Get response from text input (Gemini)
+def get_response_gemini(prompt, input_text):
     model = genai.GenerativeModel('gemini-1.5-pro-latest')
     response = model.generate_content([prompt, input_text])
     return response.text
+
+# Function: Get response from text input (OpenAI)
+def get_response_openai(prompt, input_text):
+    full_prompt = f"{prompt}\n{input_text}"
+    response = openai.ChatCompletion.create(
+        model="gpt-4",  # or "gpt-3.5-turbo" if you want
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": input_text}
+        ],
+        temperature=0.7
+    )
+    return response['choices'][0]['message']['content']
 
 # Function: Prepare image for Gemini
 def prep_image(uploaded_file):
@@ -51,6 +72,9 @@ st.header("Planner: Discover and Plan your Culinary Adventures!")
 section_choice = st.radio("Choose Section:", (
     "Location Finder", "Trip Planner", "Weather Forecasting", "Restaurant & Hotel Planner"
 ))
+
+# Select which API to use
+api_choice = st.selectbox("Choose API:", ("Gemini", "OpenAI"))
 
 # ----------------------------- LOCATION FINDER -----------------------------
 if section_choice == "Location Finder":
@@ -91,7 +115,11 @@ elif section_choice == "Trip Planner":
     input_plan = st.text_area("Enter location and number of days for planning:")
     if st.button("Plan my Trip!"):
         try:
-            response = get_response(input_prompt_planner, input_plan)
+            if api_choice == "Gemini":
+                response = get_response_gemini(input_prompt_planner, input_plan)
+            else:
+                response = get_response_openai(input_prompt_planner, input_plan)
+
             st.subheader("Planner Bot:")
             st.markdown(response)
         except Exception as e:
@@ -107,7 +135,11 @@ elif section_choice == "Weather Forecasting":
     input_location = st.text_area("Enter location to forecast weather:")
     if st.button("Forecast Weather!"):
         try:
-            response = get_response(input_prompt_weather, input_location)
+            if api_choice == "Gemini":
+                response = get_response_gemini(input_prompt_weather, input_location)
+            else:
+                response = get_response_openai(input_prompt_weather, input_location)
+
             st.subheader("Weather Bot:")
             st.markdown(response)
         except Exception as e:
@@ -124,7 +156,11 @@ elif section_choice == "Restaurant & Hotel Planner":
     input_location = st.text_area("Enter location to find Restaurants & Hotels:")
     if st.button("Find Restaurant & Hotel!"):
         try:
-            response = get_response(input_prompt_accommodation, input_location)
+            if api_choice == "Gemini":
+                response = get_response_gemini(input_prompt_accommodation, input_location)
+            else:
+                response = get_response_openai(input_prompt_accommodation, input_location)
+
             st.subheader("Accommodation Bot:")
             st.markdown(response)
         except Exception as e:
